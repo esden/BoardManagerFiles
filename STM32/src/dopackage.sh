@@ -43,6 +43,20 @@ coreurl="${url}/packages"
 sum=0
 size=0
 
+TARCMD=tar
+SHACMD=sha256sum
+STATCMD=stat
+FINDCMD=find
+SEDCMD=sed
+
+if [ $(uname) == "Darwin" ]; then
+	TARCMD=gtar
+	SHACMD=gsha256sum
+	STATCMD=gstat
+	FINDCMD=gfind
+	SEDCMD=gsed
+fi
+
 ###############################################################################
 ## Help function
 usage()
@@ -102,8 +116,8 @@ jqHandler()
 
 sumSizeOf()
 {
-  sum=`sha256sum $1| cut -d' ' -f1`
-  size=`stat --printf="%s" $1`
+  sum=`${SHACMD} $1| cut -d' ' -f1`
+  size=`${STATCMD} --printf="%s" $1`
 }
 
 # $1 tools name
@@ -118,7 +132,7 @@ generateToolsPackage()
   # do the package
   echo -n "Generating tools package $2..."
 
-  tar --transform="s|STM32Tools|STM32Tools/tools|" --exclude=".git" --exclude=".gitignore" -jhcf ${destdir}/$2 $1
+  ${TARCMD} --transform="s|STM32Tools|STM32Tools/tools|" --exclude=".git" --exclude=".gitignore" -jhcf ${destdir}/$2 $1
   if [ $? -ne 0 ]; then
     echo "failed to create archive $2"
     rm -rf $1/package_version.txt
@@ -222,15 +236,15 @@ generateCorePackage()
 
     cd tmp
 	if [ -e $1/system ]; then
-      find $1/system -not -name "*.h" -type f -delete
-      find $1/system -depth -type d -empty -delete
+      ${FINDCMD} $1/system -not -name "*.h" -type f -delete
+      ${FINDCMD} $1/system -depth -type d -empty -delete
 	fi
   else
     echo -n "Generate package $2..."
   fi
   # before pack, tools path  need to be updated
-  sed -i 's/{runtime.hardware.path}\/tools/{runtime.tools.STM32Tools.path}\/tools/g' $1/platform.txt
-  tar --exclude=".git" --exclude=".gitignore" -jhcf ${destdir}/$2 $1
+  ${SEDCMD} -i 's/{runtime.hardware.path}\/tools/{runtime.tools.STM32Tools.path}\/tools/g' $1/platform.txt
+  ${TARCMD} --exclude=".git" --exclude=".gitignore" -jhcf ${destdir}/$2 $1
   if [ $? -ne 0 ]; then
     echo "failed to create archive $2"
     rm -rf $1/package_version.txt
@@ -491,7 +505,7 @@ if [ "$corename" != "" ] && [ -e $corename ]; then
   updateJsonPlatform $corename $pkgname
 else
 # package all dir
-  for i in $(find  -L -maxdepth 2 -path "./${toolsname}" -prune -o -name boards.txt -printf "%h\n" | sed 's|./||'); do
+  for i in $(${FINDCMD}  -L -maxdepth 2 -path "./${toolsname}" -prune -o -name boards.txt -printf "%h\n" | ${SEDCMD} 's|./||'); do
   pkgname=${i}-${pkgver}.tar.bz2
   generateCorePackage $i $pkgname
   updateJsonPlatform $i $pkgname
