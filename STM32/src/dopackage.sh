@@ -57,6 +57,9 @@ if [ $(uname) == "Darwin" ]; then
 	SEDCMD=gsed
 fi
 
+# Sort keys in object outputs for better readability
+JQFLAGS=-S
+
 ###############################################################################
 ## Help function
 usage()
@@ -149,7 +152,7 @@ generateToolsPackage()
 addJsonTools()
 {
   echo -n "Adding $1 tools version ${toolsver}..."
-  jq '(.packages[].tools) |= .+ [{name: "'$1'",
+  jq ${JQFLAGS} '(.packages[].tools) |= .+ [{name: "'$1'",
           version: "'${toolsver}'",
           systems:
           [{ host: "i686-linux-gnu",
@@ -187,7 +190,7 @@ updateJsonTools()
   sumSizeOf "${TOOLSDIR}/$2"
 
   # Check if version already in the json.
-  res=`jq '.packages[] | select(.name == "'${pkgername}'").tools[] |
+  res=`jq ${JQFLAGS} '.packages[] | select(.name == "'${pkgername}'").tools[] |
       select(.name == "'$1'") | select ( .version == "'${toolsver}'")
      ' $jsonFile`
   jqHandler $? "Failed to check tools version in $jsonFile" 3
@@ -198,7 +201,7 @@ updateJsonTools()
   else
     # update the existing one
     echo -n "Updating $1 tools version ${toolsver}..."
-    jq '(.packages[] | select(.name == "'${pkgername}'") .tools[] |
+    jq ${JQFLAGS} '(.packages[] | select(.name == "'${pkgername}'") .tools[] |
         select(.name == "'$1'") | select ( .version == "'${toolsver}'")
         ).systems[] |= with_entries(.value =
         if ([.key] | contains(["url"])) then "'${toolsurl}/$2'"
@@ -269,12 +272,12 @@ updateJsonBoardName()
 
   IFS=$'\n'
   echo "$1 contains the following boards:"
-  jq 'del(.[].boards[])' $tmpjsonFile > l$tmpjsonFile
+  jq ${JQFLAGS} 'del(.[].boards[])' $tmpjsonFile > l$tmpjsonFile
   mv l$tmpjsonFile $tmpjsonFile
 
   for i in $lb; do
     echo "$i"
-	jq '.[].boards |= .+ [{name: "'$i'"}]
+	jq ${JQFLAGS} '.[].boards |= .+ [{name: "'$i'"}]
        ' $tmpjsonFile > l$tmpjsonFile
     jqHandler $? "Failed to add board name for $1" 18
     mv l$tmpjsonFile $tmpjsonFile
@@ -287,7 +290,7 @@ updateJsonBoardName()
 # $3 architecture
 addJsonCore()
 {
-  jq -n '.+ [{ name: "'$1' Cores",
+  jq ${JQFLAGS} -n '.+ [{ name: "'$1' Cores",
                architecture: "'$3'",
                version: "'${pkgver}'",
 		       category: "Contributed",
@@ -302,7 +305,7 @@ addJsonCore()
   jqHandler $? "Failed to create new core for $2" 15
   # check if the tools version is known
   if [ "$toolsver" != "" ]; then
-    jq '.[].toolsDependencies |= .+ [{ packager: "'${pkgername}'",
+    jq ${JQFLAGS} '.[].toolsDependencies |= .+ [{ packager: "'${pkgername}'",
                                        name: "'${toolsname}'",
                                        version: "'${toolsver}'"}]
        ' l$tmpjsonFile > $tmpjsonFile
@@ -312,7 +315,7 @@ addJsonCore()
   fi
   if [ "$3" == "stm32" ]; then
     # add CMSIS 4.5.0
-    jq '.[].toolsDependencies |= .+ [{ packager: "arduino",
+    jq ${JQFLAGS} '.[].toolsDependencies |= .+ [{ packager: "arduino",
                                        name: "CMSIS",
                                        version: "4.5.0"}]
        ' $tmpjsonFile > l$tmpjsonFile
@@ -328,7 +331,7 @@ updateJsonCore()
 {
   echo -n "[" > $tmpjsonFile
   # extract latest version
-  jq '.packages[] | select(.name == "'${pkgername}'").platforms[]
+  jq ${JQFLAGS} '.packages[] | select(.name == "'${pkgername}'").platforms[]
                   | select(.architecture == "'${arch}'")
                   | select(.version == '${lcoreversion}')
      ' $jsonFile >> $tmpjsonFile
@@ -336,7 +339,7 @@ updateJsonCore()
   echo -n "]" >> $tmpjsonFile
 
   # update info
-  jq ' .[].version= "'${pkgver}'"
+  jq ${JQFLAGS} ' .[].version= "'${pkgver}'"
      | .[].archiveFileName= "'$2'"
      | .[].url= "'${coreurl}/$2'"
      | .[].checksum= "SHA-256:'${sum}'"
@@ -345,7 +348,7 @@ updateJsonCore()
   jqHandler $? "Failed to update core info" 13
   # check if the tools version is known
   if [ "$toolsver" != "" ]; then
-    jq '(.[].toolsDependencies[]| select(.name == "'${toolsname}'").version)="'${toolsver}'"
+    jq ${JQFLAGS} '(.[].toolsDependencies[]| select(.name == "'${toolsname}'").version)="'${toolsver}'"
        ' l$tmpjsonFile > $tmpjsonFile
     jqHandler $? "Failed to update core tools info" 14
   else
@@ -364,7 +367,7 @@ updateJsonPlatform()
   sumSizeOf "${PKGDIR}/$2"
 
   # Check if version already in the json.
-  res=`jq '.packages[] | select(.name == "'${pkgername}'").platforms[] |
+  res=`jq ${JQFLAGS} '.packages[] | select(.name == "'${pkgername}'").platforms[] |
       select(.architecture == "'$arch'") | select ( .version == "'${pkgver}'")
      ' $jsonFile`
   jqHandler $? "Failed to check core version in $jsonFile" 7
@@ -372,7 +375,7 @@ updateJsonPlatform()
   if [ "$res" == "" ]; then
     # version doesn't exist
     # Searching last version used for the core
-    jq '.packages[] | select(.name == "'${pkgername}'").platforms[]
+    jq ${JQFLAGS} '.packages[] | select(.name == "'${pkgername}'").platforms[]
                     | select(.architecture == "'${arch}'").version
        ' $jsonFile > version.txt
     jqHandler $? "Failed to search version of $1 in $jsonFile" 8
@@ -397,15 +400,15 @@ updateJsonPlatform()
     updateJsonBoardName $1
 
     # Add core info to the json file
-    res=`jq '.' $tmpjsonFile`
-    jq '(.packages[].platforms) |= .+ '"$res"' ' $jsonFile > $tmpjsonFile
+    res=`jq ${JQFLAGS} '.' $tmpjsonFile`
+    jq ${JQFLAGS} '(.packages[].platforms) |= .+ '"$res"' ' $jsonFile > $tmpjsonFile
     jqHandler $? "Failed to update $1 in $jsonFile" 9
     mv $tmpjsonFile $jsonFile
     echo "done"
   else
     # update the existing one
     echo -n "Updating $1 core version ${pkgver}..."
-    jq '(.packages[] | select(.name == "'${pkgername}'").platforms[]
+    jq ${JQFLAGS} '(.packages[] | select(.name == "'${pkgername}'").platforms[]
                      | select(.architecture == "'$arch'")
                      | select (.version == "'${pkgver}'")
         ) |= with_entries(.value =
@@ -421,7 +424,7 @@ updateJsonPlatform()
     jqHandler $? "Failed to update core version ${pkgver} in $jsonFile" 10
     # check if the tools version is known
     if [ "$toolsver" != "" ]; then
-     jq '(.packages[] | select(.name == "'${pkgername}'").platforms[]
+     jq ${JQFLAGS} '(.packages[] | select(.name == "'${pkgername}'").platforms[]
 	                  | select(.architecture == "'$arch'")
                       | select ( .version == "'${pkgver}'").toolsDependencies[]
                       | select(.name == "'$toolsname'")
